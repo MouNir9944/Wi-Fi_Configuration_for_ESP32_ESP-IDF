@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Control</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        #device-container {
+            margin-top: 20px;
+        }
+        .device {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+        .device h2 {
+            margin: 0 0 10px;
+        }
+        .button-container {
+            margin-top: 10px;
+        }
+        .button-container button {
+            margin-right: 10px;
+        }
+        .on-button, .delete-button, #create-device-button, #scan-wifi-button, #test-wifi-button, #data-on-button, #test-on-button, #close-button-on, #save-configuration-button, #close-configuration-button, #test-on-oui-on-button, #test-on-non-on-button,#save-config,#renitialisation-config,#close-config {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .on-button {
+            background-color: red;
+            color: white;
+        }
+        .on-button.green {
+            background-color: green;
+        }
+        .delete-button {
+            background-color: #e74c3c;
+            color: white;
+        }
+        #create-device-button ,#save-config,#renitialisation-config,#close-config{
+            display: block;
+            margin: 0 auto 20px;
+            background-color: #3498db;
+            color: white;
+        }
+        #scan-wifi-button, #test-wifi-button, #data-on-button, #test-on-button, #close-button-on, #save-configuration-button, #close-configuration-button, #test-on-oui-on-button, #test-on-non-on-button {
+            background-color: #3498db;
+            color: white;
+        }
+        .popup, .confirmation-popup, .save-configuration {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid #ccc;
+            padding: 20px;
+            background-color: white;
+            z-index: 1000;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            max-width: 90%;
+            width: 400px;
+        }
+        .popup.visible, .confirmation-popup.visible, .save-configuration.visible {
+            display: block;
+        }
+        .popup button, .confirmation-popup button {
+            margin-top: 10px;
+            display: block;
+            width: 100%;
+        }
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        #overlay.visible {
+            display: block;
+        }
+        /* Position confirmation popup below test popup */
+        #confirmation-on-popup {
+            top: calc(50% + 80px);
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="wifi-popup" class="wifi-popup">
+        <h3>Scan and Connect to Wi-Fi</h3>
+        <button id="scan-wifi-button" onclick="scanwifi();">Scan Wi-Fi Networks</button>
+        <label for="wifi-networks">Select Wi-Fi: </label>
+        <select id="wifi-networks"></select>
+        <label for="wifi-password">Password: </label>
+        <input type="text" id="wifi-password">
+        <button id="test-wifi-button" onclick="testwifi();">Test Wi-Fi Connection</button><br><br>
+        <span id="wifi_state"></span>
+
+
+
+    <button id="save-config" onclick="saveconfig();">save configuration</button>
+    <button id="renitialisation-config"onclick="renitialisationconfig();">réinitialisation config</button>
+    <button id="close-config"onclick="closeconfig();">close</button>
+
+
+    <script>
+        var gateway = `ws://${window.location.host}/ws`;
+        var websocket;
+        var currentOnButton = null;
+        var currentDeviceLabel = null;
+        document.getElementById('wifi_state').innerHTML = '';
+        
+        function initWebSocket() {
+            console.log('Trying to open a WebSocket connection...');
+            websocket = new WebSocket(gateway);
+            websocket.onopen = onOpen;
+            websocket.onclose = onClose;
+            websocket.onmessage = onMessage;
+        }
+
+        function onOpen(event) {
+            console.log('Connection opened');
+            setTimeout(getconfig, 3000);
+        }
+
+        function onClose(event) {
+            console.log('Connection closed');
+        }
+
+        function onMessage(event) {
+            console.log('Message received:', event.data);
+            const myObj = JSON.parse(event.data);
+            const state = myObj.state;
+            if (state === 0 || state === 5) {
+                document.getElementById("wifi-networks").options[0] = new Option(myObj.ssid);
+                document.getElementById("wifi-password").value = myObj.password;   
+
+            } else if (state === 1) {
+                var num_scan = myObj['wifi_networks'][0].n_station;
+                setTimeout(function add_wifi_to_list() {
+                    document.getElementById("wifi-networks").options[0] = new Option('None', '');
+                    for (let i = 1; i < num_scan; i++) {
+                        document.getElementById("wifi-networks").options[i] = new Option(
+                            `${myObj['wifi_networks'][i].ssid} (${myObj['wifi_networks'][i].rssi})(${myObj['wifi_networks'][i].Band})(${myObj['wifi_networks'][i].state_wifi})`,
+                            myObj['wifi_networks'][i].ssid
+                        );
+                    }
+                }, 500);
+            } else if (state === 2) {
+                document.getElementById('wifi_state').innerHTML = `<pre>${myObj.Wifi_state}</pre>`;
+            }
+        }
+
+        initWebSocket();
+
+        function scanwifi() {
+            const data = { state: 1 };
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+
+        function testwifi() {
+            const ssid = document.getElementById("wifi-networks").value;
+            const password = document.getElementById("wifi-password").value;
+            const data = { state: 2, ssid, password };
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+
+        function getconfig() {
+            const data = { state: 0 };
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+ 
+        function saveconfig() {
+            const ssid = document.getElementById("wifi-networks").value;
+            const password = document.getElementById("wifi-password").value;
+
+
+
+            const data = { state: 5, ssid, password};
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+                //alert(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+
+        function renitialisationconfig() {
+            const data = { state: 6 };
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+
+        function closeconfig() {
+            const data = { state: 7 };
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(JSON.stringify(data));
+            } else {
+                alert('WebSocket connection is not open.');
+            }
+        }
+        
+    </script>
+</body>
+</html>

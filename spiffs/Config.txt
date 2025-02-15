@@ -1,0 +1,6 @@
+{
+"state":0,
+"ssid":"Redmi 10C",
+"password":"19944991"
+
+}
